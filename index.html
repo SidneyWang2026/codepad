@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="theme-color" content="#111318" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="CodePad" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" href="icon-192.png" />
+<title>CodePad</title>
+<style>
+  :root{
+    --bg:#f3f4f6;
+    --card:#ffffff;
+    --text:#121317;
+    --muted:#71717a;
+    --line:#d4d4d8;
+    --accent:#0a84ff;
+    --editor:#0f1115;
+    --editorText:#eef2f7;
+    --toolbar:#181b21;
+    --toolbarBtn:#252a33;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#000;
+      --card:#171719;
+      --text:#f5f5f7;
+      --muted:#a1a1a6;
+      --line:#38383a;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{
+    margin:0;min-height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+    overscroll-behavior:none;
+  }
+  body{
+    padding:max(env(safe-area-inset-top),8px) 0 max(env(safe-area-inset-bottom),8px);
+  }
+  .app{max-width:1100px;margin:0 auto;padding:10px}
+  .header{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px
+  }
+  .brand{font-size:18px;font-weight:700;letter-spacing:.2px}
+  .badge{font-size:11px;color:var(--muted);border:1px solid var(--line);padding:4px 7px;border-radius:999px}
+  .top{
+    display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    background:var(--card);border-radius:16px;padding:10px;
+    box-shadow:0 1px 8px rgba(0,0,0,.08)
+  }
+  input,select,button{
+    font:inherit;border:1px solid var(--line);border-radius:10px;
+    background:var(--card);color:var(--text);min-height:40px;padding:8px 10px
+  }
+  input{flex:1;min-width:150px}
+  select{min-width:108px}
+  button{font-weight:650;-webkit-tap-highlight-color:transparent}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:active{transform:scale(.985)}
+  .status{
+    display:flex;justify-content:space-between;gap:8px;
+    font-size:12px;color:var(--muted);margin:8px 4px 6px
+  }
+  .editorWrap{
+    overflow:hidden;border-radius:16px;background:var(--editor);
+    box-shadow:0 2px 12px rgba(0,0,0,.16)
+  }
+  .tools{
+    display:flex;gap:6px;overflow-x:auto;padding:8px;background:var(--toolbar);
+    border-bottom:1px solid #2a2e36;-webkit-overflow-scrolling:touch
+  }
+  .tools button{
+    flex:0 0 auto;min-height:34px;padding:6px 10px;border-color:#353b46;
+    background:var(--toolbarBtn);color:#eef2f7;border-radius:8px
+  }
+  .editorShell{display:flex;height:62vh;min-height:380px}
+  .lines{
+    width:48px;flex:0 0 48px;padding:14px 8px 14px 0;text-align:right;
+    color:#6f7785;background:#12151a;border-right:1px solid #252a33;
+    font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+    user-select:none;overflow:hidden;white-space:pre
+  }
+  textarea{
+    width:100%;height:100%;resize:none;border:0;outline:0;padding:14px;
+    background:var(--editor);color:var(--editorText);caret-color:#fff;
+    font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+    tab-size:4;white-space:pre;overflow:auto;border-radius:0;
+    -webkit-text-size-adjust:100%;-webkit-overflow-scrolling:touch
+  }
+  .bottom{
+    margin-top:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px
+  }
+  .hint{
+    margin:10px 2px 0;color:var(--muted);font-size:12px;line-height:1.5
+  }
+  .install{
+    display:none;margin:10px 0 0;background:var(--card);border:1px solid var(--line);
+    padding:10px;border-radius:12px;font-size:13px;line-height:1.45
+  }
+  .install.show{display:block}
+  @media (min-width:720px){
+    .bottom{grid-template-columns:repeat(4,1fr)}
+    .editorShell{height:70vh}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="brand">CodePad</div>
+    <div class="badge">Offline PWA</div>
+  </div>
+
+  <div class="top">
+    <input id="filename" value="script" placeholder="文件名" autocomplete="off" autocapitalize="off" />
+    <select id="type">
+      <option value="py">Python (.py)</option>
+      <option value="txt">Text (.txt)</option>
+    </select>
+    <button id="saveBtn">保存</button>
+    <button id="exportBtn" class="primary">导出</button>
+  </div>
+
+  <div class="status">
+    <span id="status">已保存 · 1 行 · 0 字符</span>
+    <span id="mode">Python</span>
+  </div>
+
+  <div class="editorWrap">
+    <div class="tools">
+      <button data-insert="    ">Tab</button>
+      <button id="indentBtn">缩进</button>
+      <button id="outdentBtn">反缩进</button>
+      <button data-insert="#">#</button>
+      <button data-insert="()">( )</button>
+      <button data-insert="[]">[ ]</button>
+      <button data-insert="{}">{ }</button>
+      <button data-insert="''">' '</button>
+      <button data-insert='""'>" "</button>
+      <button id="undoBtn">撤销</button>
+      <button id="selectAllBtn">全选</button>
+      <button id="clearBtn">清空</button>
+    </div>
+
+    <div class="editorShell">
+      <pre class="lines" id="lines">1</pre>
+      <textarea id="editor"
+        spellcheck="false"
+        autocorrect="off"
+        autocapitalize="off"
+        autocomplete="off"
+        wrap="off"
+        placeholder="# 在这里粘贴或输入代码&#10;&#10;def hello():&#10;    print(&quot;Hello, iPhone&quot;)"></textarea>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <button id="importBtn">导入文件</button>
+    <button id="copyBtn">复制全部</button>
+    <button id="wrapBtn">自动换行：关</button>
+    <button id="installHelpBtn">安装说明</button>
+  </div>
+
+  <input id="filePicker" type="file" accept=".py,.txt,text/plain,text/x-python" hidden />
+
+  <div class="install" id="installHelp">
+    <b>添加到 iPhone 主屏幕：</b><br>
+    用 Safari 打开本页面 → 点“分享” → “添加到主屏幕”。之后可像普通 App 一样独立打开，并支持离线使用。
+  </div>
+
+  <div class="hint">
+    CodePad 不执行任何代码，只用于编辑、粘贴和导出。Python 模式下回车会继承当前缩进，
+    行尾为冒号时自动增加 4 个空格。内容默认保存在本机浏览器。
+  </div>
+</div>
+
+<script>
+(() => {
+  const editor = document.getElementById('editor');
+  const lines = document.getElementById('lines');
+  const status = document.getElementById('status');
+  const filename = document.getElementById('filename');
+  const type = document.getElementById('type');
+  const picker = document.getElementById('filePicker');
+  const mode = document.getElementById('mode');
+  const installHelp = document.getElementById('installHelp');
+
+  let dirty = false;
+  let wrap = false;
+
+  function updateUI(){
+    const count = Math.max(1, editor.value.split('\n').length);
+    let s = '';
+    for(let i=1;i<=count;i++) s += i + (i===count ? '' : '\n');
+    lines.textContent = s;
+    lines.scrollTop = editor.scrollTop;
+    status.textContent = `${dirty ? '未保存' : '已保存'} · ${count} 行 · ${editor.value.length} 字符`;
+    mode.textContent = type.value === 'py' ? 'Python' : 'Text';
+  }
+
+  function markDirty(){
+    dirty = true;
+    updateUI();
+  }
+
+  function saveLocal(){
+    localStorage.setItem('codepad.text', editor.value);
+    localStorage.setItem('codepad.filename', filename.value || 'script');
+    localStorage.setItem('codepad.type', type.value);
+    dirty = false;
+    updateUI();
+  }
+
+  function loadLocal(){
+    const t = localStorage.getItem('codepad.text');
+    const n = localStorage.getItem('codepad.filename');
+    const ty = localStorage.getItem('codepad.type');
+    if(t !== null) editor.value = t;
+    if(n) filename.value = n;
+    if(ty) type.value = ty;
+    updateUI();
+  }
+
+  function normalizedName(){
+    let base = (filename.value || 'script').trim().replace(/[\\/:*?"<>|]+/g,'_');
+    base = base.replace(/\.(py|txt)$/i,'');
+    return base + '.' + type.value;
+  }
+
+  async function exportFile(){
+    saveLocal();
+    const name = normalizedName();
+    const mime = type.value === 'py' ? 'text/x-python' : 'text/plain';
+    const file = new File([editor.value], name, {type:mime});
+
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({files:[file], title:name});
+        return;
+      }catch(e){
+        if(e && e.name === 'AbortError') return;
+      }
+    }
+
+    const blob = new Blob([editor.value], {type:mime + ';charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  function insertText(text){
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const before = editor.value.slice(0,start);
+    const after = editor.value.slice(end);
+
+    if(['()','[]','{}',"''",'""'].includes(text)){
+      const left = text[0], right = text[1];
+      const selected = editor.value.slice(start,end);
+      editor.value = before + left + selected + right + after;
+      const cursor = selected ? start + selected.length + 2 : start + 1;
+      editor.setSelectionRange(cursor,cursor);
+    }else{
+      editor.value = before + text + after;
+      const cursor = start + text.length;
+      editor.setSelectionRange(cursor,cursor);
+    }
+    editor.focus();
+    markDirty();
+  }
+
+  function selectedLineRange(){
+    const value = editor.value;
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    let lineEnd = value.indexOf('\n', end);
+    if(lineEnd === -1) lineEnd = value.length;
+    return {start,end,lineStart,lineEnd};
+  }
+
+  function indentSelection(outdent=false){
+    const r = selectedLineRange();
+    let block = editor.value.slice(r.lineStart, r.lineEnd);
+    let arr = block.split('\n');
+
+    if(outdent){
+      arr = arr.map(line =>
+        line.startsWith('    ') ? line.slice(4) :
+        line.startsWith('\t') ? line.slice(1) :
+        line.startsWith(' ') ? line.slice(1) : line
+      );
+    }else{
+      arr = arr.map(line => '    ' + line);
+    }
+
+    block = arr.join('\n');
+    editor.value = editor.value.slice(0,r.lineStart) + block + editor.value.slice(r.lineEnd);
+    editor.setSelectionRange(r.lineStart, r.lineStart + block.length);
+    editor.focus();
+    markDirty();
+  }
+
+  editor.addEventListener('input', markDirty);
+  editor.addEventListener('scroll', () => { lines.scrollTop = editor.scrollTop; });
+
+  editor.addEventListener('keydown', e => {
+    if(e.key === 'Tab'){
+      e.preventDefault();
+      insertText('    ');
+      return;
+    }
+    if(e.key === 'Enter' && type.value === 'py'){
+      e.preventDefault();
+      const pos = editor.selectionStart;
+      const before = editor.value.slice(0,pos);
+      const currentLine = before.slice(before.lastIndexOf('\n') + 1);
+      const leading = (currentLine.match(/^[ \t]*/) || [''])[0];
+      const extra = currentLine.trimEnd().endsWith(':') ? '    ' : '';
+      insertText('\n' + leading + extra);
+    }
+  });
+
+  document.querySelectorAll('[data-insert]').forEach(btn => {
+    btn.addEventListener('click', () => insertText(btn.dataset.insert));
+  });
+
+  document.getElementById('indentBtn').onclick = () => indentSelection(false);
+  document.getElementById('outdentBtn').onclick = () => indentSelection(true);
+  document.getElementById('undoBtn').onclick = () => {
+    document.execCommand('undo');
+    editor.focus();
+    markDirty();
+  };
+  document.getElementById('selectAllBtn').onclick = () => {
+    editor.focus();
+    editor.select();
+  };
+  document.getElementById('clearBtn').onclick = () => {
+    if(confirm('确定清空当前内容吗？')){
+      editor.value = '';
+      editor.focus();
+      markDirty();
+    }
+  };
+
+  document.getElementById('saveBtn').onclick = saveLocal;
+  document.getElementById('exportBtn').onclick = exportFile;
+  document.getElementById('importBtn').onclick = () => picker.click();
+
+  picker.addEventListener('change', async () => {
+    const file = picker.files && picker.files[0];
+    if(!file) return;
+    editor.value = await file.text();
+    const m = file.name.match(/^(.*)\.(py|txt)$/i);
+    if(m){
+      filename.value = m[1];
+      type.value = m[2].toLowerCase();
+    }else{
+      filename.value = file.name;
+    }
+    markDirty();
+    picker.value = '';
+  });
+
+  document.getElementById('copyBtn').onclick = async () => {
+    try{
+      await navigator.clipboard.writeText(editor.value);
+      status.textContent = '已复制到剪贴板';
+      setTimeout(updateUI, 1000);
+    }catch(e){
+      editor.focus();
+      editor.select();
+      document.execCommand('copy');
+      updateUI();
+    }
+  };
+
+  document.getElementById('wrapBtn').onclick = (e) => {
+    wrap = !wrap;
+    editor.wrap = wrap ? 'soft' : 'off';
+    editor.style.whiteSpace = wrap ? 'pre-wrap' : 'pre';
+    e.currentTarget.textContent = `自动换行：${wrap ? '开' : '关'}`;
+  };
+
+  document.getElementById('installHelpBtn').onclick = () => {
+    installHelp.classList.toggle('show');
+  };
+
+  filename.addEventListener('input', markDirty);
+  type.addEventListener('change', markDirty);
+  window.addEventListener('beforeunload', saveLocal);
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+
+  loadLocal();
+})();
+</script>
+</body>
+</html>
